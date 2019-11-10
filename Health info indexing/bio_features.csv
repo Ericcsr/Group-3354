@@ -1,0 +1,26 @@
+﻿Features,Index
+Systolic 1,qa003
+Systolic 2,qa007
+Systolic 3,qa011
+Diastolic 1,qa004
+Diastolic 2,qa008
+Diastolic 3,qa012
+Pulse 1,qa005
+Pulse 2,qa009
+Pulse 3,qa013
+Measure arm,qa014
+breath test quality,qb005
+breath test 1,qb002
+breath test 2,qb003
+breath test 3,qb004
+hand strength test left 1,qc003
+hand strength test left 2,qc005
+hand strength test right 1,qc004
+hand strength test right 2,qc006
+hand strength test quality,qc007
+arm length,qj002
+which arm,qj003
+knee height,qk002
+which knee,qk003
+waist circumference ,qm002
+wear thick clothes during measuring,qm005

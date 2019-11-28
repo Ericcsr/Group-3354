@@ -69,3 +69,11 @@ write_csv(IndInc.2015.v3,"Household_and_individual_data/individual2.csv")
 # 7. Combine the csv according to the household id
 total <- merge(IndInc.2015.v3,HouInc.2015.v3,by="ID")
 write_csv(total,"Household_and_individual_data/household_and_individual_merged.csv")
+
+## the process to "Everything.csv"
+library(readr)
+Everything <- read_csv("Sorted data/Everything.csv")
+e <- Everything
+e1 <- e[-c(15,19,20,23,25,35,37,39:44)]
+e_nona <- na.omit(e1)
+write_csv(e_nona,"Sorted data/Everything_noNA.csv")

@@ -72,8 +72,8 @@ write_csv(total,"Household_and_individual_data/household_and_individual_merged.c
 
 ## the process to "Everything.csv"
 library(readr)
-Everything <- read_csv("Sorted data/Everything.csv")
-e <- Everything
-e1 <- e[-c(15,19,20,23,25,35,37,39:44)]
-e_nona <- na.omit(e1)
+Everything_new <- read_csv("Everything_new.csv")
+every <- Everything_new[-c(1,7,15,16,18:26,28:30,34,35,37:46)]
+every_simple <- every[-c(19,46,58)]
+e_nona <- na.omit(every_simple)
 write_csv(e_nona,"Sorted data/Everything_noNA.csv")

@@ -70,10 +70,105 @@ write_csv(IndInc.2015.v3,"Household_and_individual_data/individual2.csv")
 total <- merge(IndInc.2015.v3,HouInc.2015.v3,by="ID")
 write_csv(total,"Household_and_individual_data/household_and_individual_merged.csv")
 
-## the process to "Everything.csv"
+## the process to "Everything_new.csv"
 library(readr)
 Everything_new <- read_csv("Everything_new.csv")
 every <- Everything_new[-c(1,7,15,16,18:26,28:30,34,35,37:46)]
 every_simple <- every[-c(19,46,58)]
 e_nona <- na.omit(every_simple)
 write_csv(e_nona,"Sorted data/Everything_noNA.csv")
+
+
+#-------------------12.2 update----forward feature selection--------------------
+library(readr)
+library(leaps)
+library(MASS)
+set.seed(2)
+df<- read_csv("everthing_nona_purified.csv")
+
+df1 <- as.data.frame(df[127])
+for (i in c(5:126)) {
+  df1 <- cbind(df1, normalized(as.matrix(df[i])))
+}
+
+train_id <- sample(nrow(df1), floor(nrow(df1)*0.7))
+df_train <- df1[train_id,]
+df_test <- df1[-train_id,]
+Y = as.matrix(df_train[1])
+X = as.matrix(df_train[-c(1,69,120)])
+
+full.model <- lm(Y~X)
+# stepwise selection
+step.model <- stepAIC(full.model, direction = "backward", trace = TRUE)
+summary(step.model)
+plot(x=Y, y=step.model$fitted.values)
+mean((Y - step.model$fitted.values)^2)
+###############################################################
+# using direction = "both""backward" "forward" result
+# unscaled
+both_feature = c("hc039_w3","hd005_w3","hd003_004_w3","ge010_6","ca013_2_","xsiblingnum",
+         "cc001_w3s1","cc012_w3_1_","i011","ea006_1_","ea006_4_",
+         "fa006","ff012_1","fl022_1","Stock.investment","Systolic.2","breath.test.1",
+         "hand.strength.test.right.2","knee.height","waist.circumference")
+# scaled
+both_feature = c("hc001","hc039_w3","hd005_w3","ge004","ge010_6","ca000_w3_2_1_","ca001_w3_2_1_","xsiblingnum",
+                 "cc001_w3s1","cc012_w3_1_","i011","i020","i021","ea006_2_","ea006_4_","ea006_10_","xrtype",
+                 "xrtype","fa006","Stock.investment","Systolic.2","hand.strength.test.right.2","knee.height")
+both_feature_X = c("(Intercept)")
+for (i in both_feature) {
+  j <- paste("X",i,sep="")
+  both_feature_X <- c(both_feature_X,j)
+}
+both_coef = c()
+for (i in both_feature_X) {
+  j <- step.model[["coefficients"]][[i]]
+  both_coef <- c(both_coef,j)
+}
+both_feature_df <- cbind(rep(1,nrow(df_train)), df_train[both_feature])
+both_pred = as.matrix(both_feature_df) %*% as.matrix(both_coef)
+plot(x=Y, y=both_pred)
+mean((Y - both_pred)^2)
+# use logistic regression to see train error
+both_df <- cbind(Y,df_train[both_feature])
+glm.fits_both = glm(cancer_true~., data=both_df, family =binomial)
+summary(glm.fits_both)
+glm.prob = predict(glm.fits_both,both_df,type="response")
+glm.pred <- ifelse(glm.prob>0.25, TRUE, FALSE)
+table(glm.pred, Y)
+
+# use logistic regression to see test error
+Y_test = as.matrix(df_test["cancer_true"])
+both_df <- cbind(Y_test,df_test[both_feature])
+glm.fits_both = glm(cancer_true~., data=both_df, family =binomial)
+summary(glm.fits_both)
+glm.prob = predict(glm.fits_both,both_df,type="response")
+glm.pred <- ifelse(glm.prob>0.25, TRUE, FALSE)
+table(glm.pred, Y_test)
+
+normalized<-function(y) {
+  x<-y[!is.na(y)]
+  x<-(x - min(x)) / (max(x) - min(x))
+  y[!is.na(y)]<-x
+  return(y)
+}
+#############################################################
+# use logistic regression to see error
+'''
+both_df <- cbind(Y,df[both_feature])
+
+both_df2 <- as.data.frame(both_df[1])
+for (i in c(2:23)) {
+  both_df2 <- cbind(both_df2, normalized(both_df[i]))
+}
+
+both_df2 <- scale(both_df, center = TRUE,scale = TRUE)
+
+glm.fits_both = glm(cancer_true~., data=both_df2, family =binomial)
+summary(glm.fits_both)
+glm.prob = predict(glm.fits_both,both_df2,type="response")
+glm.pred <- ifelse(glm.prob>0.5, TRUE, FALSE)
+table(glm.pred, Y)
+'''
+#regfit.full=regsubsets(x=as.matrix(df[-c(1:4,127)]), y=as.matrix(df[127]))
+#regfit.fwd = regsubsets(y=as.matrix(df[127]), x=as.matrix(df[-c(1:4,127)]), nvmax=20, method="forward")
+#summary (regfit.fwd)

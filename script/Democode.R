@@ -110,7 +110,7 @@ for (d in 1:length(depth_vec))
 {
   boost.model = gbm(cancer_true~.,data=On_stage_data2[train,],distribution ="bernoulli", n.trees=5000,interaction.depth = depth_vec[d])
   boost.predict = predict(boost.model,newdata=On_stage_data2[val,],n.trees=5000)
-  boost.predict = (boost.predict > -5) #Set threshold
+  boost.predict = (1/(1+exp(-boost.predict)) > 0.026) #Set threshold
   t_buffer = table(boost.predict,validation.set)
   boost.total_err[d] = (t_buffer[2]+t_buffer[3])/(sum(t_buffer))
   boost.second_err[d]= t_buffer[3]/(t_buffer[3]+t_buffer[4])
@@ -120,7 +120,7 @@ boost.second.min= which.min(boost.second_err)
 boost.test_err = boost.total_err[boost.second.min] # For weighting
 boost.model = gbm(cancer_true~.,data=On_stage_data2[train,],distribution = "bernoulli",n.trees=5000,interaction.depth = boost.second.min)
 boost.pred  = predict(boost.model,newdata = On_stage_data2[test,],n.trees=5000)
-boost.thre  = boost.pred > -5
+boost.thre  = 1/(1+exp(-boost.pred)) > 0.026 
 table(boost.thre,On_stage_data2$cancer_true[test])
 boost.auc   = roc(On_stage_data2[test,]$cancer_true,as.numeric(boost.thre))
 plot(boost.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Boost',round(boost.auc$auc[[1]],2)))
@@ -142,6 +142,12 @@ logit.table = table(logit.pred,On_stage_data2$cancer_true[test])
 logit.test_err = (logit.table[2]+logit.table[3])/(sum(logit.table))
 logit.auc = roc(On_stage_data2$cancer_true[test],as.numeric(logit.pred))
 plot(logit.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Logistic Regression',round(logit.auc$auc[[1]],2)))
+
+logit.train.prob = predict(logit.model,data.frame(scale(On_stage_data2[train,names(On_stage_data2)%in%both_feature],center=T,scale=T)),type="response")
+logit.train.pred = logit.train.prob > 0.026
+logit.train.table =table(logit.train.pred,On_stage_data2$cancer_true[train])
+logit.train.auc = roc(On_stage_data2$cancer_true[train],as.numeric(logit.train.pred))
+plot(logit.train.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Logistic Regression (Training data)',round(logit.train.auc$auc[[1]],2)))
 # Use PCA and logisitic regression Arguable.
 
 # Use support vector machine.
@@ -203,7 +209,7 @@ svm.final = predict(svm.model,On_stage_data2[test,names(On_stage_data2)%in%both_
 lda.final = predict(lda.model,On_stage_data2[test,names(On_stage_data2)%in%both_feature])
 
 logit.final = predict(logit.model,scale(On_stage_data2[test,names(On_stage_data2)%in%both_feature],center=T,scale=T), type="response")
-logit.final = logit.final > 0.25
+logit.final = logit.final > 0.026
 
 boost.final = predict(boost.model,newdata=On_stage_data2[test,],n.trees=5000)
 boost.final = boost.final > 20

@@ -36,9 +36,9 @@ lasso_fit <- glmnet(train.x, train.y, alpha = 1)
 #predict(lasso_fit, s = best_lambda, type = "coefficients")
 
 pred <- predict(lasso_fit, s = best_lambda, newx = test.x)
-pred[pred < 0.025] <- 0
-pred[pred >= 0.025] <- 1
-final <- cbind(test.y, pred)
-data.frame(table(final))
+pred[pred < 0.1] <- 0
+pred[pred >= 0.1] <- 1
+table(test.y,pred)
+
 
 

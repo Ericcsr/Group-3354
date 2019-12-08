@@ -31,6 +31,8 @@ for( k in (length(train1)*0.8+1):(length(train1)*0.8+length(train2)*0.8))
   train[k] = train2[k-length(train1)*0.8]
 }
 train = na.omit(train)
+index = sample(length(train))
+train = train[index]
 # Create validation set
 val = rep(NA,length(train1)*0.2+length(train2)*0.2+100)
 counter = 1
@@ -68,11 +70,13 @@ for (i in 1:120)
 
 rf.second_err.min= which.min(second_err.cv)
 rf.total_err = total_err.cv[rf.second_err.min] # For weighting
-rf.model = randomForest(as.factor(cancer_true)~.,data=On_stage_data2,subset=train,mtry=rf.second_err.min,ntree= 1000)
+rf.model = randomForest(as.numeric(cancer_true)~.,data=On_stage_data2,subset=train,mtry=rf.second_err.min,ntree= 1000)
 rf.test = predict(rf.model,newdata=On_stage_data2[test,],type='class')
-rf.table = table(rf.test,cancer_true[test])
+rf.thresh = rf.test > 0.026 # The true ratio in sample.
+rf.table = table(rf.thresh,cancer_true[test])
 
-auc1 = roc(as.numeric(On_stage_data2[test,]$cancer_true),as.numeric(rf.test))
+
+auc1 = roc(as.numeric(On_stage_data2[test,]$cancer_true),as.numeric(rf.thresh))
 par(c(2,1))
 plot(auc1,ylim=c(0,1),print.thres=TRUE,main=paste('AUC Without SMOTE',round(auc1$auc[[1]],2)))
 # Add the step of overstampling:
@@ -82,15 +86,16 @@ colnames(training_data)[1] = "target"
 training_data$target <- ifelse(training_data$target == FALSE,0,1)
 training_data$target = as.factor(training_data$target)
 training.data = SMOTE(target~.,data=training_data,perc.over = 500,perc.under = 1000)
-rf.model = randomForest(target~.,data=training.data,mtry=rf.second_err.min,ntree = 1000)
+rf.model = randomForest(as.numeric(target)~.,data=training.data,mtry=rf.second_err.min,ntree = 1000)
 test_data = On_stage_data2[test,-121]
 test_data = cbind(On_stage_data2[test,121],test_data)
 colnames(test_data)[1] = "target"
 test_data$target = ifelse(test_data$target==FALSE,0,1)
 test_data$target = as.factor(test_data$target)
 rf.test2 = predict(rf.model,newdata=test_data,type ="class")
-rf.table2 = table(rf.test2,On_stage_data2$cancer_true[test])
-auc2 = roc(test_data$target,as.numeric(rf.test2))
+rf.thresh2 = (rf.test2-1) > 0.026
+rf.table2 = table(rf.thresh2,On_stage_data2$cancer_true[test])
+auc2 = roc(On_stage_data2$cancer_true[test],as.numeric(rf.thresh2))
 plot(auc2,ylim=c(0,1),print.thres=TRUE,main=paste('AUC with SMOTE',round(auc2$auc[[1]],2)))
 varImpPlot(rf.model)
 # Use boosted tree
@@ -116,23 +121,27 @@ boost.test_err = boost.total_err[boost.second.min] # For weighting
 boost.model = gbm(cancer_true~.,data=On_stage_data2[train,],distribution = "bernoulli",n.trees=5000,interaction.depth = boost.second.min)
 boost.pred  = predict(boost.model,newdata = On_stage_data2[test,],n.trees=5000)
 boost.thre  = boost.pred > -5
+table(boost.thre,On_stage_data2$cancer_true[test])
 boost.auc   = roc(On_stage_data2[test,]$cancer_true,as.numeric(boost.thre))
 plot(boost.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Boost',round(boost.auc$auc[[1]],2)))
 # Use Logistic regression with preselected best features
-both_feature = c("hc001","hc039_w3","hd005_w3","ge004","ge010_6","ca000_w3_2_1_","ca001_w3_2_1_","xsiblingnum",
-                 "cc001_w3s1","cc012_w3_1_","i011","i020","i021","ea006_2_","ea006_4_","ea006_10_","xrtype",
-                 "xrtype","fa006","Stock.investment","Systolic.2","hand.strength.test.right.2","knee.height","cancer_true")
+both_feature = c("xsiblingnum" ,"ca000_w3_2_1_" ,"fa001","cc012_w3_1_", 
+                    "ge010_6","Stock.investment","ca001_w3_2_1_", 
+                    "ge004","hd005_w3","i011","hc039_w3","Systolic.2", 
+                    "hand.strength.test.right.2", "Water.cigarettes", "breath.test.1", 
+                    "fa006","cg003_w2_1_","waist.circumference","cancer_true")
 
 # Standardlize data
 logit.buffer = scale(On_stage_data2[train,names(On_stage_data2)%in%both_feature],scale=T,center = T)
 logit.buffer = data.frame(logit.buffer)
-logit.buffer[,22] = cancer_true[train]
+logit.buffer[,length(both_feature)] = cancer_true[train]
 logit.model = glm(cancer_true~.,data=logit.buffer,family=binomial)
-logit.prob = predict(logit.model,scale(On_stage_data[val,names(On_stage_data2)%in%both_feature],center=T,scale=T), type="response")
-logit.pred = logit.prob > 0.1 # According to the ground truth proposal from data.
-logit.table = table(logit.pred,validation.set)
+logit.prob = predict(logit.model,data.frame(scale(On_stage_data2[test,names(On_stage_data2)%in%both_feature],center=T,scale=T)), type="response")
+logit.pred = logit.prob > 0.026 # According to the ground truth proposal from data.
+logit.table = table(logit.pred,On_stage_data2$cancer_true[test])
 logit.test_err = (logit.table[2]+logit.table[3])/(sum(logit.table))
-
+logit.auc = roc(On_stage_data2$cancer_true[test],as.numeric(logit.pred))
+plot(logit.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Logistic Regression',round(logit.auc$auc[[1]],2)))
 # Use PCA and logisitic regression Arguable.
 
 # Use support vector machine.
@@ -165,17 +174,29 @@ qda.table = table(qda.pred$class,validation.set)
 qda.test_err = (qda.table[4]+qda.table[1])/sum(qda.table)
 
 # Neural network
-ann.dframe= scale(On_stage_data2[train,names(On_stage_data2)%in%both_feature],center=T,scale = T) # Try to standardlize data.
-ann.model = neuralnet(cancer_true~.,data=On_stage_data2[train,names(On_stage_data2)%in%both_feature],hidden=c(25,25,15,5),linear.output = F)
-ann.pred  = predict(ann.model,On_stage_data2[val,names(On_stage_data2)%in%both_feature],type='class')
-ann.logit = ann.pred > 0.05
-ann.table = table(ann.logit,validation.set)
+ann.dframe = scale(On_stage_data2[train,names(On_stage_data2)%in%both_feature],center=T,scale = T) # Try to standardlize data.
+ann.dframe = data.frame(ann.dframe)
+ann.dframe$cancer_true = On_stage_data2$cancer_true[train]
+#ann.dframe = cbind(ann.dframe[,19],ann.dframe[,-19])
+#colnames(ann.dframe)[1] = "target"
+#ann.dframe$target = ifelse(ann.dframe$target==TRUE,1,0)
+#ann.dframe$target = as.factor(ann.dframe$target)
+#ann.dframe = SMOTE(target~.,ann.dframe,perc.over = 500,perc.under = 1000)
+
+
+ann.model = neuralnet(cancer_true~.,data=ann.dframe,hidden=c(100),linear.output = F)
+ann.pred  = predict(ann.model,data.frame(scale(On_stage_data2[test,names(On_stage_data2)%in%both_feature],center=T,scale=T)),type='class')
+ann.logit = ann.pred > 0.026
+ann.table = table(ann.logit,On_stage_data2$cancer_true[test])
 ann.test_err = (ann.table[1]+ann.table[4])/sum(ann.table)
+
+ann.auc = roc(On_stage_data2$cancer_true[test],as.numeric(ann.pred))
+plot(ann.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Neural Net',round(ann.auc$auc[[1]],2)))
 
 # Ensemble all learners
 test_vote = rep(0,length(test))
 ann.final = predict(ann.model,On_stage_data2[test,names(On_stage_data2)%in%both_feature])
-ann.final = ann.final > 0.05
+ann.final = ann.final > 0.026
 
 svm.final = predict(svm.model,On_stage_data2[test,names(On_stage_data2)%in%both_feature])
 

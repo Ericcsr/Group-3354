@@ -10,6 +10,7 @@ library(gbm)
 library(lattice)
 library(grid)
 library(pROC)
+library(readr)
 
 On_stage_data2 <- read_csv("../On_stage_data2.csv")
 On_stage_data2  = On_stage_data2[,c(-1,-69)]
@@ -134,63 +135,57 @@ both_feature = c("xsiblingnum" ,"ca000_w3_2_1_" ,"fa001","cc012_w3_1_",
 # Using PCA
 #PCR
 #dataset needed: Everything_noNA_scaled , Everything_noNA_noID
-Everything_noNA_noID=Everything_noNA_noID[-1]
-Everything_noNA_scaled=Everything_noNA_scaled[-1]
-x=model.matrix(cancer_true~.,Everything_noNA_noID)[,-1]
+#Everything_noNA_noID=Everything_noNA_noID[-1]
+#Everything_noNA_scaled=Everything_noNA_scaled[-1]
+library(pls)
+x=model.matrix(cancer_true~.,On_stage_data2)[,-1] # Except for the last label column
 set.seed(2)
-train=sample(dim(Everything_noNA_noID)[1],dim(Everything_noNA_noID)[1]*0.7)
-set.seed(2)
-pcr.fit=pcr(cancer_true~., data=Everything_noNA_noID,subset=train,validation="CV")
+pcr.fit=pcr(cancer_true~., data=On_stage_data2,subset=train,validation="CV")
 validationplot(pcr.fit,val.type = "MSEP")
-pcr.pred=predict(pcr.fit,x[-train,],ncomp = 60)
+pcr.pred=predict(pcr.fit,x[test,],ncomp = 60)
 pcr.pred[which.max(pcr.pred)]
-mean((pcr.pred-Everything_noNA_noID$cancer_true[-train])^2)
+mean((pcr.pred-On_stage_data2[test])^2)
 #natural incidence
-pcr.pred=1/(1+exp(-pcr.pred))
+# pcr.pred=1/(1+exp(-pcr.pred))
 plot(pcr.pred)
-pcr.result=pcr.pred>=0.5
-table(pcr.result,Everything_noNA_noID$cancer_true[-train])
+pcr.result=pcr.pred>=0.026
+table(pcr.result,On_stage_data2$cancer_true[test])
+
+
 
 #PCR standarlization
-x2=model.matrix(cancer_true~.,Everything_noNA_scaled)[,-1]
-attach(Everything_noNA_scaled)
-pcr.fit2=pcr(cancer_true~., data=Everything_noNA_scaled,subset=train,validation="CV")
+pcr.scaled.dframe = scale(On_stage_data2,center = T,scale = T)
+pcr.scaled.dframe = cbind(On_stage_data2$cancer_true,On_stage_data2[,-121])
+colnames(pcr.scaled.dframe)[1]="cancer_true"
+x2=model.matrix(cancer_true~.,pcr.scaled.dframe)[,-1]
+pcr.fit2=pcr(cancer_true~., data=pcr.scaled.dframe,subset=train,validation="CV")
 validationplot(pcr.fit2,val.type = "MSEP")
-pcr.pred2=predict(pcr.fit2,x2[-train,],ncomp = 100)
+pcr.pred2=predict(pcr.fit2,x2[test,],ncomp = 100)
 pcr.pred2[which.max(pcr.pred2)]
-mean((pcr.pred2-Everything_noNA_scaled$cancer_true[-train])^2)
+mean((pcr.pred2-On_stage_data2$cancer_true[test])^2)
 plot(pcr.pred2)
 #natural incidence
-pcr.pred2=1/(1+exp(-pcr.pred2))
+# pcr.pred2=1/(1+exp(-pcr.pred2))
 plot(pcr.pred2)
-pcr.result=pcr.pred2>=0.5
-table(pcr.result2,(Everything_noNA_scaled$cancer_true[-train])>0)
+pcr.result2=pcr.pred2>=0.026
+table(pcr.result,On_stage_data2$cancer_true[test])
 
 # Lasso + Logistic regression:
-library(readr)
 library(glmnet)
-everthing_nona_purified <- read_csv("everthing_nona_purified.csv")
-set.seed(1472)
-test_row = sample(1:nrow(everthing_nona_purified),nrow(everthing_nona_purified)*3/10)
-everthing_nona_purified$cancer_true[everthing_nona_purified$cancer_true=="TRUE"] <-1
-cancer_col <- everthing_nona_purified["cancer_true"]
-everthing_nona_purified <- everthing_nona_purified[-c(1:4)]
-#everthing_nona_purified <- as.numeric(unlist(everthing_nona_purified))
-numeric_matrix <- model.matrix(cancer_true ~ ., data = everthing_nona_purified)
-cancer_col <- as.numeric(unlist(cancer_col))
+numeric_matrix <- model.matrix(cancer_true ~ ., data = On_stage_data2)[,-1]
+# cancer_col <- as.numeric(unlist(cancer_col))
 # test & train do respectively
-train.x = numeric_matrix[-test_row,]
-train.y = cancer_col[-test_row]
-test.x = numeric_matrix[test_row,]
-test.y = cancer_col[test_row]
-lasso_cross_valid <- cv.glmnet(train.x, train.y, alpha = 1)
+train.x = numeric_matrix[train,]
+train.y = as.numeric(On_stage_data2$cancer_true[train])
+test.x = numeric_matrix[test,]
+test.y = as.numeric(On_stage_data2$cancer_true[test])
+lasso_cross_valid <- cv.glmnet(train.x, train.y, alpha = 1) # How the Alpha is set?
 best_lambda <- lasso_cross_valid$lambda.min
 lasso_fit <- glmnet(train.x, train.y, alpha = 1)
 predict(lasso_fit, s = best_lambda, type = "coefficients")
 pred <- predict(lasso_fit, s = best_lambda, newx = test.x)
-pred[pred < 0.025] <- 0
-pred[pred >= 0.025] <- 1
-table(test.y,pred)
+lasso.result = pred > 0.026
+table(lasso.result,On_stage_data2$cancer_true[test])
 
 # Standardlize data
 logit.buffer = scale(On_stage_data2[train,names(On_stage_data2)%in%both_feature],scale=T,center = T)
@@ -282,7 +277,7 @@ ann.test_err = (ann.table[1]+ann.table[4])/sum(ann.table)
 ann.auc = roc(On_stage_data2$cancer_true[test],as.numeric(ann.pred))
 plot(ann.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Neural Net',round(ann.auc$auc[[1]],2)))
 
-# Ensemble all learners
+# Ensemble all learners TODO: Test the functionality when available
 test_vote = rep(0,length(test))
 ann.final = predict(ann.model,On_stage_data2[test,names(On_stage_data2)%in%both_feature])
 ann.final = ann.final > 0.026
@@ -295,7 +290,8 @@ logit.final = predict(logit.model,scale(On_stage_data2[test,names(On_stage_data2
 logit.final = logit.final > 0.026
 
 boost.final = predict(boost.model,newdata=On_stage_data2[test,],n.trees=5000)
-boost.final = boost.final > 20
+boost.final = 1/(1+exp(-boost.final))
+boost.final = boost.final > 0.026
 
 rf.final = predict(rf.model,On_stage_data2[test,],type='class')
 
@@ -316,53 +312,36 @@ test_vote = test_vote > 0.5
 
 
 #----------seperate stepwise selection----------
-normalized<-function(y) {
-  x<-y[!is.na(y)]
-  x<-(x - min(x)) / (max(x) - min(x))
-  y[!is.na(y)]<-x
-  return(y)
-}
-
 library(readr)
 library(leaps)
 library(MASS)
 library(glmnet)
 library(magrittr)
 set.seed(2)
-df<- read_csv("everthing_nona_purified.csv")
 
-df1 <- as.data.frame(df[127])
-for (i in c(5:126)) {
-  df1 <- cbind(df1, normalized(as.matrix(df[i])))
-}
-
-df1 <- df1[-c(43:53, 69, 120)]
-
+df.scaled = pcr.scaled.dframe
 #----- to be replaced with csr train:val:test = 6:2:2 split
-train_id <- sample(nrow(df1), floor(nrow(df1)*0.7))
-df_train <- df1[train_id,]
-df_test <- df1[-train_id,]
 #----- replacement done----------------------------
 
-Y_train = as.matrix(df_train[1]) #cancer_true
-X_train = as.matrix(df_train[-c(1)]) #features
-Y_test = as.matrix(df_test[1]) #cancer_true
-X_test = as.matrix(df_test[-c(1)]) #features
+Y_train = as.matrix(df.scaled[train,1]) #cancer_true
+X_train = as.matrix(df.scaled[train,-1]) #features
+Y_test = as.matrix(df.scaled[test,1]) #cancer_true
+X_test = as.matrix(df.scaled[test,-1]) #features
 
 #full.model
-full.model = glm(cancer_true~., data=df_train, family =binomial)
+full.model = glm(cancer_true~., data=df.scaled[train,], family =binomial)
 summary(full.model)
-pfit.full <- full.model %>% predict(df_train, type = "response")
+pfit.full <- full.model %>% predict(df.scaled[train,], type = "response")
 pred.full <- ifelse(pfit.full > 200/8000, "TRUE", "FALSE")
 plot(Y_train, pfit.full)
-table(Y_train, pred.full)
+table(pred.full,Y_train)
 
-nothing = glm(cancer_true~1, data=df_train, family=binomial)
+nothing = glm(cancer_true~1, data=df.scaled[train,], family=binomial)
 summary(nothing)
-pfit.nothing <- nothing %>% predict(df_train, type = "response")
+pfit.nothing <- nothing %>% predict(df.scaled[train,], type = "response")
 pred.nothing <- ifelse(pfit.nothing > 200/8000, "TRUE", "FALSE")
 plot(Y_train, pfit.nothing)
-table(Y_train, pred.nothing)
+table(pred.nothing,Y_train)
 
 forwards <- step(nothing,scope=list(lower=formula(nothing),upper=formula(full.model)), direction="forward")
 formula(forwards)
@@ -373,13 +352,15 @@ formula(backwards)
 summary(backwards)
 
 ##-----to be replaced with new logistic regression
-forward.lg <- glm(cancer_true~xsiblingnum + ca000_w3_2_1_ + fa001 + cc012_w3_1_ + 
-                    ge010_6 + Stock.investment + ca001_w3_2_1_ + knee.height + 
-                    ge004 + hd005_w3 + i011 + hc039_w3 + Systolic.2 + 
-                    hand.strength.test.right.2 + Water.cigarettes + breath.test.1 + 
-                    fa006 + cg003_w2_1_ + waist.circumference, data=df_train, family=binomial)
+forward.lg <-glm(formula = cancer_true ~ xsiblingnum + ca001_w3_2_1_ + ge010_6 + 
+                   cc012_w3_1_ + fa001 + ca024_w3_1_ + Community.activities + 
+                   cg003_w2_1_ + ea006_4_ + i015 + breath.test.1 + hd005_w3 + 
+                   ea006_10_ + ea006_6_ + ca013_2_ + Stock.investment + Water.cigarettes + 
+                   i018 + Community.game + waist.circumference + fa006 + hand.strength.test.quality, 
+                 family = binomial, data = df.scaled[train, ])
+
 summary(forward.lg)
-pfit <- predict(forward.lg, df_test, type = "response")
+pfit <- predict(forward.lg, df.scaled[test,], type = "response")
 plot(Y_test, pfit)
 pred <- ifelse(pfit>2/80, 1, 0)
 table(pred, Y_test)

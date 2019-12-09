@@ -125,11 +125,72 @@ table(boost.thre,On_stage_data2$cancer_true[test])
 boost.auc   = roc(On_stage_data2[test,]$cancer_true,as.numeric(boost.thre))
 plot(boost.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Boost',round(boost.auc$auc[[1]],2)))
 # Use Logistic regression with preselected best features
+# Separate code need to conduct stepwise feature selection
 both_feature = c("xsiblingnum" ,"ca000_w3_2_1_" ,"fa001","cc012_w3_1_", 
                     "ge010_6","Stock.investment","ca001_w3_2_1_", 
                     "ge004","hd005_w3","i011","hc039_w3","Systolic.2", 
                     "hand.strength.test.right.2", "Water.cigarettes", "breath.test.1", 
                     "fa006","cg003_w2_1_","waist.circumference","cancer_true")
+# Using PCA
+#PCR
+#dataset needed: Everything_noNA_scaled , Everything_noNA_noID
+Everything_noNA_noID=Everything_noNA_noID[-1]
+Everything_noNA_scaled=Everything_noNA_scaled[-1]
+x=model.matrix(cancer_true~.,Everything_noNA_noID)[,-1]
+set.seed(2)
+train=sample(dim(Everything_noNA_noID)[1],dim(Everything_noNA_noID)[1]*0.7)
+set.seed(2)
+pcr.fit=pcr(cancer_true~., data=Everything_noNA_noID,subset=train,validation="CV")
+validationplot(pcr.fit,val.type = "MSEP")
+pcr.pred=predict(pcr.fit,x[-train,],ncomp = 60)
+pcr.pred[which.max(pcr.pred)]
+mean((pcr.pred-Everything_noNA_noID$cancer_true[-train])^2)
+#natural incidence
+pcr.pred=1/(1+exp(-pcr.pred))
+plot(pcr.pred)
+pcr.result=pcr.pred>=0.5
+table(pcr.result,Everything_noNA_noID$cancer_true[-train])
+
+#PCR standarlization
+x2=model.matrix(cancer_true~.,Everything_noNA_scaled)[,-1]
+attach(Everything_noNA_scaled)
+pcr.fit2=pcr(cancer_true~., data=Everything_noNA_scaled,subset=train,validation="CV")
+validationplot(pcr.fit2,val.type = "MSEP")
+pcr.pred2=predict(pcr.fit2,x2[-train,],ncomp = 100)
+pcr.pred2[which.max(pcr.pred2)]
+mean((pcr.pred2-Everything_noNA_scaled$cancer_true[-train])^2)
+plot(pcr.pred2)
+#natural incidence
+pcr.pred2=1/(1+exp(-pcr.pred2))
+plot(pcr.pred2)
+pcr.result=pcr.pred2>=0.5
+table(pcr.result2,(Everything_noNA_scaled$cancer_true[-train])>0)
+
+# Lasso + Logistic regression:
+library(readr)
+library(glmnet)
+everthing_nona_purified <- read_csv("everthing_nona_purified.csv")
+set.seed(1472)
+test_row = sample(1:nrow(everthing_nona_purified),nrow(everthing_nona_purified)*3/10)
+everthing_nona_purified$cancer_true[everthing_nona_purified$cancer_true=="TRUE"] <-1
+cancer_col <- everthing_nona_purified["cancer_true"]
+everthing_nona_purified <- everthing_nona_purified[-c(1:4)]
+#everthing_nona_purified <- as.numeric(unlist(everthing_nona_purified))
+numeric_matrix <- model.matrix(cancer_true ~ ., data = everthing_nona_purified)
+cancer_col <- as.numeric(unlist(cancer_col))
+# test & train do respectively
+train.x = numeric_matrix[-test_row,]
+train.y = cancer_col[-test_row]
+test.x = numeric_matrix[test_row,]
+test.y = cancer_col[test_row]
+lasso_cross_valid <- cv.glmnet(train.x, train.y, alpha = 1)
+best_lambda <- lasso_cross_valid$lambda.min
+lasso_fit <- glmnet(train.x, train.y, alpha = 1)
+predict(lasso_fit, s = best_lambda, type = "coefficients")
+pred <- predict(lasso_fit, s = best_lambda, newx = test.x)
+pred[pred < 0.025] <- 0
+pred[pred >= 0.025] <- 1
+table(test.y,pred)
 
 # Standardlize data
 logit.buffer = scale(On_stage_data2[train,names(On_stage_data2)%in%both_feature],scale=T,center = T)
@@ -162,11 +223,33 @@ for (cost in 1:length(cost_vec))
   svm.total_err[cost] = (svm.table[2]+svm.table[3])/sum(svm.table)
   svm.second_err[cost]= svm.table[3]/(svm.table[4]+svm.table[3])
 }
+svm.linear.second_err = rep(NA, length(cost_vec))
+svm.linear.val_err    = rep(NA, length(cost_vec)) 
+for (cost in 1:length(cost_vec))
+{
+  svm.linear.mod = svm(as.factor(cancer_true)~.,On_stage_data2[train,],type="C",cost=cost_vec[cost],kernel = "linear")
+  svm.linear.pred= predict(svm.linear.mod, On_stage_data2[val,])
+  svm.linear.table = table(svm.linear.pred,validation.set)
+  svm.linear.val_err[cost]   = (svm.linear.table[2]+svm.linear.table[3])/sum(svm.linear.table)
+  svm.linear.second_err[cost]= (svm.linear.table[3])/(svm.linear.table[3]+svm.linear.table[4])
+}
+
+
 svm.second_err.min = which.min(svm.second_err)
 svm.test_err   = svm.total_err[svm.second_err.min]
 svm.model = svm(as.factor(cancer_true)~.,On_stage_data2[train,], type='C', cost=cost_vec[svm.second_err.min])
 svm.pred = predict(svm.model,On_stage_data2[test,])
+table(svm.pred,On_stage_data2$cancer_true[test])
+svm.auc = roc(On_stage_data2$cancer_true[test],svm.pred)
+plot(logit.train.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Radial SVM',round(svm.auc$auc[[1]],2)))
 
+
+svm.linear.second_err.min = which.min(svm.linear.second_err)
+svm.linear.model = svm(as.factor(cancer_true)~.,On_stage_data2[train,], type='C', cost=cost_vec[svm.linear.second_err.min],kernel="linear")
+svm.linear.pred = predict(svm.model,On_stage_data2[test,])
+table(svm.linear.pred,On_stage_data2$cancer_true[test])
+svm.linear.auc = roc(On_stage_data2$cancer_true[test],svm.linear.pred)
+plot(logit.train.auc,ylim=c(0,1),print.thres=TRUE,main=paste('AUC of Linear SVM',round(svm.linear.auc$auc[[1]],2)))
 # Using LDA
 lda.model = lda(as.factor(cancer_true)~.,On_stage_data2[train,names(On_stage_data2)%in%both_feature],subset=train)
 lda.pred  = predict(lda.model,On_stage_data2[val,names(On_stage_data2)%in%both_feature])

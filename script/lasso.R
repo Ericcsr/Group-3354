@@ -33,7 +33,7 @@ best_lambda <- lasso_cross_valid$lambda.min
 
 lasso_fit <- glmnet(train.x, train.y, alpha = 1)
 
-#predict(lasso_fit, s = best_lambda, type = "coefficients")
+predict(lasso_fit, s = best_lambda, type = "coefficients")
 
 pred <- predict(lasso_fit, s = best_lambda, newx = test.x)
 pred[pred < 0.025] <- 0

@@ -28,6 +28,6 @@
 
    1. The detailed outcome might be different from the report since in the report, models are trained separately with different random number seeds.
 
-   2. Report and Poster are available:
+   2. Report and Poster are available: [here]"https://github.com/Ericcsr/Group-3354/blob/master/supplimentry%20docs/Report_COMP3354.pdf"
 
       

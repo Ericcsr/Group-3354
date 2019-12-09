@@ -12,8 +12,8 @@ library(grid)
 library(pROC)
 library(readr)
 
-On_stage_data2 <- read_csv("../On_stage_data2.csv")
-On_stage_data2  = On_stage_data2[,c(-1,-69)]
+On_stage_data2 <- read_csv("On_stage_data2.csv")
+On_stage_data2  = On_stage_data2[,c(-69)]
 # Sample division
 
 

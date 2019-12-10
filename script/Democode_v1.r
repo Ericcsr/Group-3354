@@ -166,7 +166,7 @@ plot(pcr.pred2)
 # pcr.pred2=1/(1+exp(-pcr.pred2))
 plot(pcr.pred2)
 pcr.result2=pcr.pred2>=0.026
-table(pcr.result,On_stage_data2$cancer_true[test])
+table(pcr.result2,On_stage_data2$cancer_true[test])
 
 # Lasso + Logistic regression:
 library(glmnet)

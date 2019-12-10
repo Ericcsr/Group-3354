@@ -140,7 +140,7 @@ both_feature = c("xsiblingnum" ,"ca000_w3_2_1_" ,"fa001","cc012_w3_1_",
 library(pls)
 x=model.matrix(cancer_true~.,On_stage_data2)[,-1] # Except for the last label column
 set.seed(2)
-pcr.fit=pcr(cancer_true~., data=On_stage_data2,subset=train,validation="CV")
+pcr.fit=pcr(cancer_true~., data=On_stage_data2,subset=train,validation="LOO")
 validationplot(pcr.fit,val.type = "MSEP")
 pcr.pred=predict(pcr.fit,x[test,],ncomp = 60)
 pcr.pred[which.max(pcr.pred)]
@@ -151,14 +151,12 @@ plot(pcr.pred)
 pcr.result=pcr.pred>=0.026
 table(pcr.result,On_stage_data2$cancer_true[test])
 
-
-
 #PCR standarlization
 pcr.scaled.dframe = scale(On_stage_data2,center = T,scale = T)
 pcr.scaled.dframe = cbind(On_stage_data2$cancer_true,On_stage_data2[,-121])
 colnames(pcr.scaled.dframe)[1]="cancer_true"
 x2=model.matrix(cancer_true~.,pcr.scaled.dframe)[,-1]
-pcr.fit2=pcr(cancer_true~., data=pcr.scaled.dframe,subset=train,validation="CV")
+pcr.fit2=pcr(cancer_true~., data=pcr.scaled.dframe,subset=train,validation="LOO")
 validationplot(pcr.fit2,val.type = "MSEP")
 pcr.pred2=predict(pcr.fit2,x2[test,],ncomp = 100)
 pcr.pred2[which.max(pcr.pred2)]
